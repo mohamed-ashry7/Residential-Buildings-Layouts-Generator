@@ -29,8 +29,17 @@ get_room_type(minor_bathroom,X,W,Y,H,Type):-
 get_room_type(living_room,X,W,Y,H,Type):-
     Type = living_room(X,W,Y,H).
 
+get_room_type(main_hallway,X,W,Y,H,Type):-
+    Type = main_hallway(X,W,Y,H).
+
 get_room_type(hallway,X,W,Y,H,Type):-
     Type = hallway(X,W,Y,H).
+
+get_room_type(elevator,X,W,Y,H,Type):-
+    Type = elevator(X,W,Y,H).
+
+get_room_type(stairs,X,W,Y,H,Type):-
+    Type = stairs(X,W,Y,H).
 
 get_room_type(dressing_room,X,W,Y,H,Type):-
     Type = dressing_room(X,W,Y,H).
@@ -39,20 +48,18 @@ get_room_type(sun_room,X,W,Y,H,Type):-
     Type = sun_room(X,W,Y,H).
 
 
-convert_types_into_rooms([],[],[]).
+convert_types_into_rooms([],_,_,[],[]).
 convert_types_into_rooms([Room|RS],W,H,[R|T],[X,Width,Y,Height|Vs]):-
     ((length(Room,2),Room =[Type,MinArea]);
     (length(Room,3),Room = [Type,MinArea,Width]);
     (length(Room,4),Room = [Type, MinArea,Width,Height])),
-    X in 0..W,
-    Y in 0..H,
-    Width in 1..W,
-    Height in 1..H,
+    [X,Width] ins 0..W,
+    [Y,Height] ins 0..H,
     X+Width #=< W,
     Y+Height #=<H,
     RealArea #= Width*Height,
     RealArea #>=MinArea,
-    get_room_type(Type,X,W,Y,H,R),
+    get_room_type(Type,X,Width,Y,Height,R),
     convert_types_into_rooms(RS,W,H,T,Vs).
 
 
@@ -61,7 +68,9 @@ convert_types_into_rooms([Room|RS],W,H,[R|T],[X,Width,Y,Height|Vs]):-
 
 
 % ------------------------------------------Adjacency predicate----------------------------------------
+make_adjacent(V,V).
 make_adjacent(U,V):-
+    U\=V,
     get_room_type(_,X1,W1,Y1,H1,U),
     get_room_type(_,X2,W2,Y2,H2,V),
     (
@@ -104,7 +113,7 @@ make_the_kitchen_bathrooms_adjacent(L):-
 
 %-------------------------------------------------------Sun room --------------------------------------------------------------------------
 
-get_the_sun_room([],none). % In case there is not a dining room. 
+get_the_sun_room([],none). % In case there is not a sun room room. 
 
 get_the_sun_room([H|T],K):-
     H \= sun_room(_,_,_,_),
@@ -116,13 +125,19 @@ get_the_sun_room([H|_],H):-
 
 make_the_sun_room_light(L,O):-
     get_the_sun_room(L,S),
-    S = sun_room(X,_,Y,_),
+    (
+    (S=none, O=none);
+
+    (S = sun_room(X,_,Y,_),
     open_sides(N,E,S,W),
-    (   S=none;
+    (
         (N=1,O=min(Y));
         (S=1,O=max(Y));
         (E=1,O=max(X));
-        (W=1,O=min(X))
+        (W=1,O=min(X));
+        O = none
+    )
+    )
     ).
 
 
@@ -155,15 +170,16 @@ make_the_dressing_rooms_bedrooms_adjacent(L):-
 %------------------------------------------------Minor Bathrooms and Bedrooms-------------------------------------
 
 get_the_bedrooms_minor_bathrooms([],[]).
+get_the_bedrooms_minor_bathrooms([_],[]).
 
-get_the_bedrooms_minor_bathrooms([H|T],T1):-
-    H\=bedroom(_,_,_,_),
-    get_the_bedrooms_minor_bathrooms(T,T1). 
+get_the_bedrooms_minor_bathrooms([H,B|T],T1):-
+    (H\=bedroom(_,_,_,_);B\=minor_bathroom(_,_,_,_)),
+    get_the_bedrooms_minor_bathrooms([B|T],T1). 
 
 get_the_bedrooms_minor_bathrooms([B,M|T],[B,M|T1]):-
-B = bedroom(_,_,_,_), 
-M = minor_bathroom(_,_,_,_),
-get_the_bedrooms_minor_bathrooms(T,T1).
+    B = bedroom(_,_,_,_), 
+    M = minor_bathroom(_,_,_,_),
+    get_the_bedrooms_minor_bathrooms(T,T1).
 
 
 make_the_bedrooms_minor_bathrooms_adjacent_helper([]).
@@ -172,7 +188,7 @@ make_the_bedrooms_minor_bathrooms_adjacent_helper([B,M|T]):-
     make_the_bedrooms_minor_bathrooms_adjacent_helper(T).
 
 make_the_bedrooms_minor_bathrooms_adjacent(L):-
-    get_the_dressing_rooms_bedrooms(L,T),
+    get_the_bedrooms_minor_bathrooms(L,T),
     make_the_bedrooms_minor_bathrooms_adjacent_helper(T).
 %-------------------------------------------------Dining Room and Kitchen------------------------------------------
 
@@ -197,26 +213,184 @@ make_the_kitchen_dining_room_adjacent(L):-
     ).
 
 
+% ---------------------------------------------------Hallway---------------------------------------------------
+
+has_hallway([H|_]):-
+    H=[hallway|_].
+
+has_hallway([H|T]):-
+    H\=[hallway|_],
+    has_hallway(T).
 
 
-%--------------------------------------------------Design Apartment----------------------------------------------
+handle_hallway(L,NL):-
+    has_hallway(L),
+    NL = L. 
+
+handle_hallway(L,NL):-
+    \+has_hallway(L),
+    NL = [[hallway,1]|L].
 
 
-design_apart(L,W,H,F):-
-    convert_types_into_rooms(L,W,H,F,Vs),
-    make_the_kitchen_bathrooms_adjacent(L),
-    make_the_sun_room_light(L,O),
-    make_the_dressing_rooms_bedrooms_adjacent(L),
-    make_the_bedrooms_minor_bathrooms_adjacent_helper(L),
-    make_the_kitchen_dining_room_adjacent(L),
-    disjoint2(F),
-    labeling([O],Vs).
+
+get_all_hallways([],[]). % In case there is not a dining room. 
+
+get_all_hallways([H|T],K):-
+    H \= hallway(_,_,_,_),
+    get_all_hallways(T,K).
+
+get_all_hallways([H|T],[H|T1]):-
+    H = hallway(_,_,_,_),
+    get_all_hallways(T,T1).
+
+
+make_all_rooms_adjacent_hallway_helper([],_).
+make_all_rooms_adjacent_hallway_helper([H|T],[Hallway|TH]):-
+    (make_adjacent(H,Hallway);
+    make_all_rooms_adjacent_hallway_helper([H],TH)),
+    make_all_rooms_adjacent_hallway_helper(T,[Hallway|TH]).
+
+make_all_rooms_adjacent_hallway(L):-
+    get_all_hallways(L,HW),
+    make_all_rooms_adjacent_hallway_helper(L,HW).
+
+
+get_one_hallway([H|_],H):-
+    H=hallway(_,_,_,_).
+
+get_one_hallway([H|T],G):-
+    H\=hallway(_,_,_,_),
+    get_one_hallway(T,G).
+
+%-------------------------------------------------Design Apartment----------------------------------------------
+
+
+design_apart(L,W,H,F,Vs,Options,Hallway):-
+    handle_hallway(L,NL),
+    convert_types_into_rooms(NL,W,H,F,Vs),
+    get_one_hallway(F,Hallway),
+    make_the_kitchen_bathrooms_adjacent(F),
+    make_the_sun_room_light(F,O),
+    ((Options=[],O=none);Options=[]),
+    make_the_dressing_rooms_bedrooms_adjacent(F),
+    make_the_bedrooms_minor_bathrooms_adjacent(F),
+    make_the_kitchen_dining_room_adjacent(F),
+    make_all_rooms_adjacent_hallway(F).
     
 
+design_floor_helper([],_,_,[],[],[],[]).
+design_floor_helper([H|T],Width,Height,[F|T1],[Vs|T2],[Options|T3],[Hallway|T4]):-
+    design_apart(H,Width,Height,F,Vs,Options,Hallway),
+    design_floor_helper(T,Width,Height,T1,T2,T3,T4).
 
-test(F):-
-    Rs = [R1,R2,R3],
+
+
+
+add_elevator_stairs(W,H,ElevatorStairs,Coordinates):-
+    ElevatorStairs =[elevator(XE,1,YE,1),stairs(XS,1,YS,1)],
+    Coordinates= [XE,YE,XS,YS],
+    [XE,XS] ins 0..W,
+    [YE,YS] ins 0..H,
+    XE + 1 #=<W,
+    XS +1 #=<W,
+    YE +1 #=<H,
+    YS +1 #=<H.
+
+
+add_main_hallway(Width,Height,MainHallWay,MainHallWayVars):-
+    MainHallWay = main_hallway(MX,MW,MY,MH),
+    MainHallWayVars = [MX,MW,MY,MH],
+    [MX,MW] ins 0..Width,
+    [MY,MH] ins 0..Height,
+    MX +MW #=<Width,
+    MY +MH #=<Height.
+
+
+calc_area(H,A):-
+    get_room_type(_,_,Width,_,Height,H),
+    A #= Width*Height.
+
+get_the_whole_area([],0).
+get_the_whole_area([H|T],A):-
+    calc_area(H,G),
+    A #= G+A1,
+    get_the_whole_area(T,A1).
+
+option_divine_propotion(_,[]).
+option_divine_propotion(Width,[R|T]):-
+    get_room_type(_,_,W,_,H,R),
+    (var(W),
+    var(H),
+    B in Width,
+    H+B#=W,
+    W//H #= H//B;true),
+    option_divine_propotion(Width,T). 
+
+
+design_floor(As,Width,Height,OptionalGlobal,F):-
+    [LandscapeLook,DistanceToElevator,Symmetry,Divine] = OptionalGlobal, 
+    add_main_hallway(Width,Height,MainHallWay,MainHallWayVars),
+    add_elevator_stairs(Width,Height,ES,Coor),
+    make_adjacent_lists(MainHallWayVars,ES),
+    design_floor_helper(As,Width,Height,FF,VF,OF,Hallways),
+    make_adjacent_lists(MainHallWay,Hallways),
+    Vs = [Coor,MainHallWayVars|VF],
+    flatten(Vs, Variables),
+    F = [ES,MainHallWay|FF],
+    flatten(F, Functors),
+    get_the_whole_area(F,Area),
+    OFA = [max(Area)|OF],
+    flatten(OFA, Options),
+    (Divine =1 -> option_divine_propotion(Width,F)),
+    disjoint2(Functors),
+    labeling(Options,Variables).
+
+
+
+
+test0(F):-
+    Width = 100,
+    Height = 200,
+    As = [A1,A2],
+    A1 = [R1,R2,R3],
     R1=[bedroom,50],
     R2=[minor_bathroom,20] ,
     R3=[kitchen,10],
-    design_apart(Rs,100,200,F).
+    A2 = [R4,R5,R6],
+    R4=[bedroom,10],
+    R5=[minor_bathroom,10] ,
+    R6=[kitchen,25] ,
+    design_floor(As,Width,Height,[1,1,1,1],F).
+%                               [LandscapeLook,DistanceToElevator,Symmetry,Divine]
+
+
+test1(Fs):-
+    % F = [bedroom(0, 1, 0, 50),hallway(1,1,1,1), minor_bathroom(1, 1, 0, 20), kitchen(0, 1, 50, 123)],
+    % has_hallway(F).
+    Vs = [X,W,Y,H,X1,W1,Y1,H1],
+    Vs ins 1..100,
+    Fs = [F1,F2],
+    F1 = hallway(X,W,Y,H),
+    F2 = kitchen(X1,W1,Y1,H1),
+    % make_adjacent_lists(F1,[F1,F2]),
+    make_all_rooms_adjacent_hallway(Fs),
+    disjoint2(Fs),
+    labeling([],Vs). 
+    
+
+test2(F):-
+    Divine = 1 ,
+    W=100,H=200,
+    A1 = [R1,R2,R3],
+    R2=[bedroom,50],
+    R1=[minor_bathroom,20] ,
+    R3=[kitchen,10],
+    design_apart(A1,W,H,F,Vs,O,_),
+    (Divine =1,option_divine_propotion(W,F) ;Divine = 0 ),
+    flatten(O, Options),
+    disjoint2(F),
+    labeling(Options,Vs).
+
+
+% test3(F):-
+
