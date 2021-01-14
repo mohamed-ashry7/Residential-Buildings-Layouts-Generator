@@ -370,18 +370,18 @@ handle_optional_global_constraints(F,Options):-
     (DistanceToElevator =1, option_equal_distance_to_elevator(Apartments,E);DistanceToElevator=0),
     (Symmetry =1, option_symmetry([]);Symmetry=0),
     (Divine =1, option_divine_propotion(G);Divine=0).
-
+% ----------------------------------------------Soft Constraints--------------------------------------------------
 
 calc_exposed_fn([],0).
 calc_exposed_fn([R|A],C):-
     get_room_type(_,X,W,Y,H,R),
-    % open_sides(No,Ea,So,We),
+    open_sides(No,Ea,So,We),
     floor_dimensions(Width,Height),
     ((
-    (X<1,We=1;
-    Y<1,No=1;
-    X<Width,X>Width-5,Ea=1;
-    Y<Height,Y>Height-5),
+    (X#<5,We=1;
+    Y#<5,No=1;
+    X+W#<Width,X+W#>Width-5,Ea=1;
+    Y+H#<Height,Y+H#>Height-5,So=1),
     C1=0);C1=1),
     C #= C1+C2,
     calc_exposed_fn(A,C2). 
@@ -409,23 +409,25 @@ get_all_bathrooms([],[]).
 get_all_bathrooms([R|A],[R|T1]):-
     get_room_type(master_bathroom,_,_,_,_,R),get_all_bathrooms(A,T1).
 
-get_all_bedrooms([R|A],T1):-
-    get_room_type(Type,_,_,_,_,R),Type\=master_bathroom,get_all_bathrooms(A,T1). 
+get_all_bathrooms([R|A],T1):-
+    get_room_type(Type,_,_,_,_,R),
+    Type\=master_bathroom,
+    get_all_bathrooms(A,T1). 
 
-calc_bathroom_fn([R|A],[B|Bs],C):-
+calc_bathroom_fn_helper([R|A],[B|Bs],C):-
     calc_abs_distance(R,B,C1),
     C #=C1+C2,
-    calc_bathroom_fn(A,Bs,C2).
+    calc_bathroom_fn_helper(A,Bs,C2).
 
 calc_bathroom_fn(A,C):-
     get_all_bathrooms(A,Bs),
-    calc_bathroom_fn(A,Bs,C).
+    calc_bathroom_fn_helper(A,Bs,C).
 
 calc_distance_fn([_],0).
 
 calc_distance_fn([R,R1|T],D):-
     
-    calc_abs_distance(R,R1,C),(C>5,D=1;C=<5,D=0);calc_distance_fn([R1|T],D). 
+    calc_abs_distance(R,R1,C),(C#>5,D=1;C#=<5,D=0);calc_distance_fn([R1|T],D). 
 
 
 
@@ -435,8 +437,8 @@ implement_soft_constraints([],[],0).
 implement_soft_constraints([A|T1],[S|C],V):-
     [ExposedDayLight,Distance,BedroomsCloser,MainBathroom] = S, 
     (ExposedDayLight=1,calc_exposed_fn(A,EV);ExposedDayLight=0,EV=0),
-    (Distance=1,get_all_bedrooms(A,Bs),calc_distance_fn(A,DV);Distance=0,DV=0),
-    (BedroomsCloser=1,get_all_bedrooms(A,Bs),calc_bedroom_closer(A,BV);BedroomsCloser=0,BV=0),
+    (Distance=1,calc_distance_fn(A,DV);Distance=0,DV=0),
+    (BedroomsCloser=1,get_all_bedrooms(A,Bs),calc_bedroom_closer(Bs,BV);BedroomsCloser=0,BV=0),
     (MainBathroom=1,calc_bathroom_fn(A,MBV);MainBathroom=0,MBV=0),
     V #= EV+DV+BV+MBV+V1,
     implement_soft_constraints(T1,C,V1).
