@@ -398,7 +398,6 @@ calc_abs_distance(F,G,C):-
     get_room_type(_,X,_,Y,_,F),
     get_room_type(_,X1,_,Y1,_,G),
     C #= abs(X-X1)+abs(Y-Y1).
-calc_distance_fn([],0).
 
 calc_bedroom_closer([_],0).
 calc_bedroom_closer([F,G|A],C):-
@@ -421,6 +420,13 @@ calc_bathroom_fn([R|A],[B|Bs],C):-
 calc_bathroom_fn(A,C):-
     get_all_bathrooms(A,Bs),
     calc_bathroom_fn(A,Bs,C).
+
+calc_distance_fn([_],0).
+
+calc_distance_fn([R,R1|T],D):-
+    
+    calc_abs_distance(R,R1,C),(C>5,D=1;C=<5,D=0);calc_distance_fn([R1|T],D). 
+
 
 
 
@@ -474,6 +480,7 @@ test0(F):-
     R4=[bedroom,10],
     R5=[minor_bathroom,10] ,
     R6=[kitchen,25] ,
+    Soft = [[1,1,1,1],[0,0,0,0]],
     design_floor(As,Soft,F).
 
 
